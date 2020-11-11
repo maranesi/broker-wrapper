@@ -2,7 +2,7 @@ import { broker, IService } from '../broker';
 
 const Service = {
   printMessage(message: any): void {
-    console.log(JSON.parse(message));
+    console.log(JSON.parse(message.value));
   }
 };
 
