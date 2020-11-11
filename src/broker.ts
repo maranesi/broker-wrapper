@@ -39,7 +39,7 @@ class Broker {
                 if (!event) return;
 
                 const item : T = event;
-                item.service(message);
+                if (message.value) item.service(JSON.parse(message.value.toString()));
             },
         })
     }
