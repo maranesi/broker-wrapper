@@ -2,42 +2,47 @@ import { v4 as uuidv4 } from 'uuid';
 import { Consumer, Kafka, Producer } from 'kafkajs';
 import { clientId, groupId, brokers } from './constants';
 
-interface IService {
-    name: string,
+export interface IService {
+    eventName: string,
     service: Function
 }
 
-export async function getBroker(events?: Array<IService> ){
-    const kafka = new Kafka({clientId, brokers});
-    const producer : Producer = kafka.producer();
-    await producer.connect();
+class Broker {
+    private kafka: Kafka;
+    private producer: Producer;
 
-    if(events && events.length){
-        const consumer : Consumer =  kafka.consumer({ groupId })
-        await consumer.connect();
-
-        events.forEach(element => {
-            consumer.subscribe({topic: element.name, fromBeginning: true})
-        });
-
-        consumer.run({
-            eachMessage: async ({ topic, partition, message }) => {
-                const item : IService = events.find(e => topic === e.name) ;
-                item.service(message)
-            },
-        })
+    constructor() {
+        this.kafka = new Kafka({ clientId, brokers });
+        this.producer = this.kafka.producer();
     }
-
-    const Broker = {
-        send: async (eventName : string, payload: Object) => {
-            await producer.send({
+    
+    async send(eventName: string, payload: unknown) {
+            await this.producer.connect();
+            await this.producer.send({
                 topic: eventName,
                 messages: [
                     { key: uuidv4(), value: JSON.stringify(payload) },
                 ],
-            })
+            });
+            await this.producer.disconnect();
         }
+
+    async listen<T extends IService>(events: T[]) {
+        const consumer: Consumer = this.kafka.consumer({ groupId });
+        await consumer.connect();
+
+        events.forEach(el => consumer.subscribe({ topic: el.eventName, fromBeginning: true }));
+
+        consumer.run({
+            eachMessage: async ({ topic, partition, message }) => {
+                const event = events.find(el => topic === el.eventName);
+                if (!event) return;
+
+                const item : T = event;
+                if (message.value) item.service(JSON.parse(message.value.toString()));
+            },
+        })
     }
-    
-    return Broker
 }
+
+export const broker = new Broker();
